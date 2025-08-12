@@ -30,6 +30,8 @@ import { isJavascriptFile } from './util/fileExtensions';
 import invariant from './util/invariant';
 import { extractFirstJsonObject, extractJsonObjects } from './util/json';
 import { getNunjucksEngine } from './util/templates';
+import { TokenUsageTracker } from './util/tokenUsage';
+import { accumulateTokenUsage } from './util/tokenUsageUtils';
 
 import type {
   ApiClassificationProvider,
@@ -45,7 +47,6 @@ import type {
   ProviderTypeMap,
   TokenUsage,
 } from './types';
-import { accumulateTokenUsage } from './util/tokenUsageUtils';
 
 class LlmRubricProviderError extends Error {
   constructor(message: string) {
@@ -507,6 +508,8 @@ export async function matchesLlmRubric(
     }
     return fail(resp.error || 'No output', resp.tokenUsage);
   }
+
+  TokenUsageTracker.getInstance().trackUsage(finalProvider.id(), resp.tokenUsage);
 
   let jsonObjects: any[] = [];
   if (typeof resp.output === 'string') {

@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto';
 
+import { TokenUsageTracker } from 'src/util/tokenUsage';
 import cliState from '../../cliState';
 import logger from '../../logger';
 import { OpenAiChatCompletionProvider } from '../../providers/openai/chat';
@@ -18,7 +19,7 @@ import {
 import invariant from '../../util/invariant';
 import { safeJsonStringify } from '../../util/json';
 import { sleep } from '../../util/time';
-import { transform, type TransformContext, TransformInputType } from '../../util/transform';
+import { type TransformContext, TransformInputType, transform } from '../../util/transform';
 import { ATTACKER_MODEL, ATTACKER_MODEL_SMALL, TEMPERATURE } from './constants';
 
 async function loadRedteamProvider({
@@ -154,7 +155,7 @@ export async function getTargetResponse(
   throw new Error(
     `
     Target returned malformed response: expected either \`output\` or \`error\` to be set.
-    
+
     Instead got: ${safeJsonStringify(targetRespRaw)}
     `,
   );
@@ -316,7 +317,6 @@ export async function tryUnblocking({
 }): Promise<{
   success: boolean;
   unblockingPrompt?: string;
-  tokenUsage?: TokenUsage;
 }> {
   try {
     // Check if the server supports unblocking feature
@@ -358,9 +358,11 @@ export async function tryUnblocking({
       vars: {},
     });
 
+    TokenUsageTracker.getInstance().trackUsage(unblockingProvider.id(), response.tokenUsage);
+
     if (response.error) {
       logger.error(`[Unblocking] Unblocking provider error: ${response.error}`);
-      return { success: false, tokenUsage: response.tokenUsage };
+      return { success: false };
     }
 
     const parsed = response.output as any;
@@ -373,13 +375,11 @@ export async function tryUnblocking({
       return {
         success: true,
         unblockingPrompt: parsed.unblockingAnswer,
-        tokenUsage: response.tokenUsage,
       };
     } else {
       logger.debug('[Unblocking] No blocking question detected');
       return {
         success: false,
-        tokenUsage: response.tokenUsage,
       };
     }
   } catch (error) {
